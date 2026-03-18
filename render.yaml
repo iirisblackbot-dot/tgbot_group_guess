@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: tgbot-group-guess
+    env: docker
+    buildCommand: ""
+    startCommand: "python3 tgbot/bot.py"
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
