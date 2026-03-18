@@ -61,8 +61,8 @@ class Drawing:
             encoded_prompt = urllib.parse.quote(prompt)
             # Используем Pollinations.ai (бесплатно, без ключа)
             seed = random.randint(1, 1000000)
-            # Используем модель flux и добавляем параметры для стабильности
-            image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&seed={seed}&model=flux&nologo=true"
+            # Используем модель flux для высокого качества
+            image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&seed={seed}&model=flux&nologo=true&enhance=true"
             
             # Скачиваем изображение с таймаутом
             async with aiohttp.ClientSession() as http_session:
