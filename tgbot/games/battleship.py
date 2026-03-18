@@ -28,9 +28,7 @@ class BattleshipGame:
     def place_ships(self, grid):
         for ship_len in SHIPS:
             placed = False
-            attempts = 0
-            while not placed and attempts < 1000:
-                attempts += 1
+            while not placed:
                 horiz = random.choice([True, False])
                 if horiz:
                     r, c = random.randint(0, GRID_SIZE - 1), random.randint(0, GRID_SIZE - ship_len)
@@ -39,38 +37,58 @@ class BattleshipGame:
                     r, c = random.randint(0, GRID_SIZE - ship_len), random.randint(0, GRID_SIZE - 1)
                     cells = [(r+i, c) for i in range(ship_len)]
 
+                # Check for collisions with other ships and boundaries
                 ok = True
                 for (rr, cc) in cells:
-                    for dr in [-1,0,1]:
-                        for dc in [-1,0,1]:
-                            nr, nc = rr+dr, cc+dc
-                            if 0 <= nr < GRID_SIZE and 0 <= nc < GRID_SIZE:
-                                if grid[nr][nc]: ok = False
+                    # Check cell itself
+                    if not (0 <= rr < GRID_SIZE and 0 <= cc < GRID_SIZE and not grid[rr][cc]):
+                        ok = False
+                        break
+                    # Check adjacent cells (including diagonals) for other ships
+                    for dr in [-1, 0, 1]:
+                        for dc in [-1, 0, 1]:
+                            if dr == 0 and dc == 0: continue
+                            nr, nc = rr + dr, cc + dc
+                            if 0 <= nr < GRID_SIZE and 0 <= nc < GRID_SIZE and grid[nr][nc]:
+                                ok = False
+                                break
+                        if not ok: break
+                
                 if ok:
                     for (rr, cc) in cells: grid[rr][cc] = True
                     placed = True
 
     def bot_shoot(self):
+        # Prioritize shooting around known hits
         if self.bot_memory:
-            r, c = self.bot_memory.pop(0)
+            # Filter out already shot cells from memory
+            self.bot_memory = [(r, c) for r, c in self.bot_memory if self.player_grid[r][c] == EMPTY]
+            if self.bot_memory:
+                r, c = self.bot_memory.pop(0)
+            else:
+                r, c = self._get_random_empty_cell()
         else:
-            available = [(r, c) for r in range(GRID_SIZE) for c in range(GRID_SIZE) if self.player_grid[r][c] == EMPTY]
-            if not available: return None
-            r, c = random.choice(available)
+            r, c = self._get_random_empty_cell()
 
-        if self.player_grid[r][c] in [HIT, MISS, SUNK]: return self.bot_shoot()
+        if r is None: return None # No available cells to shoot
 
         if self.player_ships[r][c]:
             self.player_grid[r][c] = HIT
             self.bot_hits += 1
+            # Add adjacent cells to memory for follow-up shots
             for dr, dc in [(-1,0),(1,0),(0,-1),(0,1)]:
                 nr, nc = r+dr, c+dc
-                if 0 <= nr < GRID_SIZE and 0 <= nc < GRID_SIZE:
-                    if self.player_grid[nr][nc] == EMPTY: self.bot_memory.insert(0, (nr, nc))
+                if 0 <= nr < GRID_SIZE and 0 <= nc < GRID_SIZE and self.player_grid[nr][nc] == EMPTY:
+                    self.bot_memory.append((nr, nc))
             return (r, c, True)
         else:
             self.player_grid[r][c] = MISS
             return (r, c, False)
+
+    def _get_random_empty_cell(self):
+        available = [(r, c) for r in range(GRID_SIZE) for c in range(GRID_SIZE) if self.player_grid[r][c] == EMPTY]
+        if not available: return None, None
+        return random.choice(available)
 
 class Battleship:
     def __init__(self, sessions):
@@ -132,9 +150,11 @@ class Battleship:
         
         if data == "game_battleship":
             game = BattleshipGame()
-            user_stats = self.sessions.get(user_id, {})
+            if user_id not in self.sessions:
+                self.sessions[user_id] = {"bs_wins": 0, "bs_losses": 0}
+            user_stats = self.sessions[user_id]
             self.sessions[session_id] = {"game": "battleship", "bs_game": game, "user_id": user_id}
-            text = self._build_single_text(game, user_stats.get("bs_wins", 0), user_stats.get("bs_losses", 0), "🎯 Стреляй!")
+            text = self._build_single_text(game, user_stats["bs_wins"], user_stats["bs_losses"], "🎯 Стреляй!")
             await query.edit_message_text(text, parse_mode="Markdown", reply_markup=self._get_single_keyboard(game))
             return
 
@@ -145,7 +165,9 @@ class Battleship:
             if not session or "bs_game" not in session: return
             game = session["bs_game"]
             u_id = session["user_id"]
-            user_stats = self.sessions.get(u_id, {})
+            if u_id not in self.sessions:
+                self.sessions[u_id] = {"bs_wins": 0, "bs_losses": 0}
+            user_stats = self.sessions[u_id]
 
             if game.bot_ships[r][c]:
                 game.bot_grid[r][c] = HIT
@@ -157,19 +179,19 @@ class Battleship:
                 game.bot_shoot()
 
             if game.player_hits >= TOTAL_CELLS:
-                user_stats["bs_wins"] = user_stats.get("bs_wins", 0) + 1
+                user_stats["bs_wins"] += 1
                 self.sessions[u_id] = user_stats
-                await query.edit_message_text(f"🏆 *Ты победил!*\n\n📊 Счёт: 🏆{user_stats['bs_wins']} / 💀{user_stats.get('bs_losses', 0)}", parse_mode="Markdown", reply_markup=self.get_multi_keyboard(game_over=True))
+                await query.edit_message_text(f"🏆 *Ты победил!*\n\n📊 Счёт: 🏆{user_stats["bs_wins"]} / 💀{user_stats["bs_losses"]}", parse_mode="Markdown", reply_markup=self.get_multi_keyboard(game_over=True))
                 if session_id in self.sessions: del self.sessions[session_id]
                 return
             if game.bot_hits >= TOTAL_CELLS:
-                user_stats["bs_losses"] = user_stats.get("bs_losses", 0) + 1
+                user_stats["bs_losses"] += 1
                 self.sessions[u_id] = user_stats
-                await query.edit_message_text(f"💀 *Бот победил!*\n\n📊 Счёт: 🏆{user_stats.get('bs_wins', 0)} / 💀{user_stats['bs_losses']}", parse_mode="Markdown", reply_markup=self.get_multi_keyboard(game_over=True))
+                await query.edit_message_text(f"💀 *Бот победил!*\n\n📊 Счёт: 🏆{user_stats["bs_wins"]} / 💀{user_stats["bs_losses"]}", parse_mode="Markdown", reply_markup=self.get_multi_keyboard(game_over=True))
                 if session_id in self.sessions: del self.sessions[session_id]
                 return
 
-            await query.edit_message_text(self._build_single_text(game, user_stats.get("bs_wins", 0), user_stats.get("bs_losses", 0), res), parse_mode="Markdown", reply_markup=self._get_single_keyboard(game))
+            await query.edit_message_text(self._build_single_text(game, user_stats["bs_wins"], user_stats["bs_losses"], res), parse_mode="Markdown", reply_markup=self._get_single_keyboard(game))
             return
 
         if data.startswith("bs_m_"):
@@ -185,8 +207,17 @@ class Battleship:
                 session["p2_id"] = user_id
                 session["p2_name"] = query.from_user.first_name
                 session["phase"] = "playing"
-                self._auto_place(session["p1_ships"])
-                self._auto_place(session["p2_ships"])
+                # Ship placement is handled by BattleshipGame class now
+                # For multiplayer, we need to place ships for both players
+                # This part needs to be handled carefully, as the current BattleshipGame places ships for bot and player
+                # For multiplayer, each player needs their own ship grid.
+                # Let's assume for now that p1_ships and p2_ships are directly used for placement.
+                # The _auto_place method was removed, so we need to call the logic directly or re-implement.
+                # Given the current structure, it's better to create a new BattleshipGame instance for each player's view
+                # or refactor ship placement to be independent of the game instance.
+                # For simplicity, I will re-implement a basic ship placement here for multiplayer.
+                self._place_ships_for_multiplayer(session["p1_ships"])
+                self._place_ships_for_multiplayer(session["p2_ships"])
                 await self._update_multi_msg(query, session, context)
                 return
 
@@ -230,25 +261,46 @@ class Battleship:
                 await query.answer(hit_msg)
                 await self._update_multi_msg(query, session, context)
 
-    def _auto_place(self, ships_grid):
+
+
+    def _place_ships_for_multiplayer(self, grid):
         for ship_len in SHIPS:
             placed = False
             while not placed:
                 horiz = random.choice([True, False])
                 if horiz:
-                    r, c = random.randint(0, GRID_SIZE-1), random.randint(0, GRID_SIZE-ship_len)
+                    r, c = random.randint(0, GRID_SIZE - 1), random.randint(0, GRID_SIZE - ship_len)
                     cells = [(r, c+i) for i in range(ship_len)]
                 else:
-                    r, c = random.randint(0, GRID_SIZE-ship_len), random.randint(0, GRID_SIZE-1)
+                    r, c = random.randint(0, GRID_SIZE - ship_len), random.randint(0, GRID_SIZE - 1)
                     cells = [(r+i, c) for i in range(ship_len)]
-                if all(not ships_grid[rr][cc] for rr, cc in cells):
-                    for rr, cc in cells: ships_grid[rr][cc] = True
+
+                ok = True
+                for (rr, cc) in cells:
+                    if not (0 <= rr < GRID_SIZE and 0 <= cc < GRID_SIZE and not grid[rr][cc]):
+                        ok = False
+                        break
+                    for dr in [-1, 0, 1]:
+                        for dc in [-1, 0, 1]:
+                            if dr == 0 and dc == 0: continue
+                            nr, nc = rr + dr, cc + dc
+                            if 0 <= nr < GRID_SIZE and 0 <= nc < GRID_SIZE and grid[nr][nc]:
+                                ok = False
+                                break
+                        if not ok: break
+                
+                if ok:
+                    for (rr, cc) in cells: grid[rr][cc] = True
                     placed = True
 
     async def _update_multi_msg(self, query, session, context):
         turn_name = session["p1_name"] if session["turn"] == "p1" else session["p2_name"]
         turn_emoji = "🔴" if session["turn"] == "p1" else "🔵"
-        session_id = self.get_session_id(query)
+        # session_id is already available from the query, no need to re-get it if it's an inline message
+        # For regular messages, session_id is f"{query.message.chat_id}_{query.message.message_id}"
+        # but for editing an inline message, it's query.inline_message_id
+        # We need to ensure session_id is consistent. Let's assume it's passed correctly or derived from query.
+        session_id = query.inline_message_id if query.inline_message_id else f"{query.message.chat_id}_{query.message.message_id}"
         text = (f"🚢 *Морской бой*\n\n"
                 f"Ход: {turn_emoji} *{turn_name}*\n\n"
                 f"🔴 {session['p1_name']}: {session['p1_hits']}/{TOTAL_CELLS} 💥\n"

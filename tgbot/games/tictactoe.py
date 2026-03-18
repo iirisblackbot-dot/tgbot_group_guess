@@ -15,17 +15,16 @@ class TicTacToe:
         return f"{query.message.chat_id}_{query.message.message_id}"
 
     def new_game(self, session_id, user_id):
-        # Сохраняем статистику пользователя, если она есть
-        user_stats = self.sessions.get(user_id, {})
+        # Инициализируем сессию игры
         self.sessions[session_id] = {
             "game": "ttt",
             "board": [EMPTY] * 9,
             "player": X,
             "user_id": user_id,
-            "ttt_wins": user_stats.get("ttt_wins", 0),
-            "ttt_losses": user_stats.get("ttt_losses", 0),
-            "ttt_draws": user_stats.get("ttt_draws", 0),
         }
+        # Инициализируем статистику пользователя, если её нет
+        if user_id not in self.sessions:
+            self.sessions[user_id] = {"ttt_wins": 0, "ttt_losses": 0, "ttt_draws": 0}
         return self.sessions[session_id]
 
     def get_board_keyboard(self, board, game_over=False, multi=False):
@@ -139,9 +138,10 @@ class TicTacToe:
         
         if data == "game_ttt":
             session = self.new_game(session_id, user_id)
+            user_stats = self.sessions.get(user_id, {"ttt_wins": 0, "ttt_losses": 0, "ttt_draws": 0})
             text = (f"⚔️ *Крестики-нолики*\n\n"
                     f"Ты играешь за ❌, бот за ⭕\n"
-                    f"📊 Счёт: 🏆{session['ttt_wins']} / 💀{session['ttt_losses']} / 🤝{session['ttt_draws']}\n\n"
+                    f"📊 Счёт: 🏆{user_stats["ttt_wins"]} / 💀{user_stats["ttt_losses"]} / 🤝{user_stats["ttt_draws"]}\n\n"
                     f"Твой ход!")
             await query.edit_message_text(text, parse_mode="Markdown", reply_markup=self.get_board_keyboard(session["board"]))
             return
@@ -218,27 +218,28 @@ class TicTacToe:
 
             if winner:
                 # Обновляем статистику в сессии пользователя
-                user_stats = self.sessions.get(user_id, {})
+                user_stats = self.sessions.get(user_id, {"ttt_wins": 0, "ttt_losses": 0, "ttt_draws": 0})
                 if winner == X:
-                    user_stats["ttt_wins"] = user_stats.get("ttt_wins", 0) + 1
+                    user_stats["ttt_wins"] += 1
                     res_text = "🏆 *Ты победил!*"
                 elif winner == O:
-                    user_stats["ttt_losses"] = user_stats.get("ttt_losses", 0) + 1
+                    user_stats["ttt_losses"] += 1
                     res_text = "💀 *Бот победил!*"
                 else:
-                    user_stats["ttt_draws"] = user_stats.get("ttt_draws", 0) + 1
+                    user_stats["ttt_draws"] += 1
                     res_text = "🤝 *Ничья!*"
                 
                 self.sessions[user_id] = user_stats
                 text = (f"⚔️ *Крестики-нолики*\n\n{res_text}\n\n"
-                        f"📊 Счёт: 🏆{user_stats.get('ttt_wins', 0)} / 💀{user_stats.get('ttt_losses', 0)} / 🤝{user_stats.get('ttt_draws', 0)}")
+                        f"📊 Счёт: 🏆{user_stats["ttt_wins"]} / 💀{user_stats["ttt_losses"]} / 🤝{user_stats["ttt_draws"]}")
                 await query.edit_message_text(text, parse_mode="Markdown", reply_markup=self.get_board_keyboard(board, game_over=True))
                 if session_id in self.sessions: del self.sessions[session_id]
             else:
-                text = (f"⚔️ *Крестики-нолики*\n\n"
-                        f"Ты играешь за ❌, бот за ⭕\n"
-                        f"📊 Счёт: 🏆{session['ttt_wins']} / 💀{session['ttt_losses']} / 🤝{session['ttt_draws']}\n\n"
-                        f"Твой ход!")
+            user_stats = self.sessions.get(user_id, {"ttt_wins": 0, "ttt_losses": 0, "ttt_draws": 0})
+            text = (f"⚔️ *Крестики-нолики*\n\n"
+                    f"Ты играешь за ❌, бот за ⭕\n"
+                    f"📊 Счёт: 🏆{user_stats["ttt_wins"]} / 💀{user_stats["ttt_losses"]} / 🤝{user_stats["ttt_draws"]}\n\n"
+                    f"Твой ход!")
                 await query.edit_message_text(text, parse_mode="Markdown", reply_markup=self.get_board_keyboard(board))
             return
 

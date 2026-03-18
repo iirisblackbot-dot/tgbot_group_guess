@@ -20,13 +20,13 @@ class Quiz:
 
     async def start(self, query, context, user_id):
         q_idx = random.randint(0, len(QUESTIONS) - 1)
-        user_stats = self.sessions.get(user_id, {})
+        if user_id not in self.sessions:
+            self.sessions[user_id] = {"quiz_score": 0}
+        user_stats = self.sessions[user_id]
         user_stats.update({
             "game": "quiz",
             "q_idx": q_idx,
-            "quiz_score": user_stats.get("quiz_score", 0)
         })
-        self.sessions[user_id] = user_stats
         await self._show_question(query, q_idx, user_id)
 
     async def _show_question(self, query, q_idx, user_id):
@@ -43,9 +43,9 @@ class Quiz:
             await query.answer("Это не твоя викторина! Начни свою в меню.", show_alert=True)
             return
 
-        user_stats = self.sessions.get(user_id)
-        if not user_stats or user_stats.get("game") != "quiz":
+        if user_id not in self.sessions or self.sessions[user_id].get("game") != "quiz":
             return
+        user_stats = self.sessions[user_id]
 
         ans_idx = int(parts[3])
         q_idx = user_stats["q_idx"]

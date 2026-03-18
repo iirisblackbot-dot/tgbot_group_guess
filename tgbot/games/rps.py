@@ -130,9 +130,11 @@ class RPS:
                 return
 
         if data == "game_rps":
-            user_stats = self.sessions.get(user_id, {})
+            if user_id not in self.sessions:
+                self.sessions[user_id] = {"rps_wins": 0, "rps_losses": 0, "rps_draws": 0}
+            user_stats = self.sessions[user_id]
             text = (f"✂️ *Камень-Ножницы-Бумага*\n\n"
-                    f"📊 Счёт: 🏆{user_stats.get('rps_wins', 0)} / 💀{user_stats.get('rps_losses', 0)} / 🤝{user_stats.get('rps_draws', 0)}\n\n"
+                    f"📊 Счёт: 🏆{user_stats["rps_wins"]} / 💀{user_stats["rps_losses"]} / 🤝{user_stats["rps_draws"]}\n\n"
                     f"Выбери свой ход:")
             await query.edit_message_text(text, parse_mode="Markdown", reply_markup=self.get_choice_keyboard())
             return
@@ -141,16 +143,18 @@ class RPS:
         if data in choice_map:
             player_choice = choice_map[data]
             bot_choice = random.choice(list(CHOICES.keys()))
-            user_stats = self.sessions.get(user_id, {})
+            if user_id not in self.sessions:
+                self.sessions[user_id] = {"rps_wins": 0, "rps_losses": 0, "rps_draws": 0}
+            user_stats = self.sessions[user_id]
             
             if player_choice == bot_choice:
-                user_stats["rps_draws"] = user_stats.get("rps_draws", 0) + 1
+                user_stats["rps_draws"] += 1
                 result = "🤝 *Ничья!*"
             elif BEATS[player_choice] == bot_choice:
-                user_stats["rps_wins"] = user_stats.get("rps_wins", 0) + 1
+                user_stats["rps_wins"] += 1
                 result = "🏆 *Ты победил!*"
             else:
-                user_stats["rps_losses"] = user_stats.get("rps_losses", 0) + 1
+                user_stats["rps_losses"] += 1
                 result = "💀 *Бот победил!*"
 
             self.sessions[user_id] = user_stats
@@ -158,5 +162,5 @@ class RPS:
                     f"Ты выбрал: {CHOICES[player_choice]}\n"
                     f"Бот выбрал: {CHOICES[bot_choice]}\n\n"
                     f"{result}\n\n"
-                    f"📊 Счёт: 🏆{user_stats.get('rps_wins', 0)} / 💀{user_stats.get('rps_losses', 0)} / 🤝{user_stats.get('rps_draws', 0)}")
+                    f"📊 Счёт: 🏆{user_stats["rps_wins"]} / 💀{user_stats["rps_losses"]} / 🤝{user_stats["rps_draws"]}")
             await query.edit_message_text(text, parse_mode="Markdown", reply_markup=self.get_result_keyboard())

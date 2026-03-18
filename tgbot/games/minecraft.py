@@ -82,10 +82,9 @@ class Minecraft:
 
     async def handle(self, query, context, data, user_id):
         # В майнкрафте сессия всегда привязана к user_id
-        user_stats = self.sessions.get(user_id, {})
-        if user_stats.get("game") != "minecraft":
-            user_stats = new_mc_session()
-            self.sessions[user_id] = user_stats
+        if user_id not in self.sessions or self.sessions[user_id].get("game") != "minecraft":
+            self.sessions[user_id] = new_mc_session()
+        user_stats = self.sessions[user_id]
 
         # Проверка владельца сессии в группе
         parts = data.split("_")
@@ -160,7 +159,13 @@ class Minecraft:
         pickaxe = session.get("pickaxe", "none")
         gained = {}
         for res, (min_v, max_v) in table.items():
-            bonus = 1 if (pickaxe == "wooden" and res in ["stone", "coal"]) or (pickaxe == "stone" and res in ["iron", "coal"]) or (pickaxe == "iron" and res in ["gold", "diamond"]) else 0
+            bonus = 0
+            if pickaxe == "wooden" and res in ["stone", "coal"]:
+                bonus = 1
+            elif pickaxe == "stone" and res in ["iron", "coal"]:
+                bonus = 1
+            elif pickaxe == "iron" and res in ["gold", "diamond"]:
+                bonus = 1
             amount = random.randint(min_v, max_v + bonus)
             if amount > 0:
                 session["inventory"][res] = session["inventory"].get(res, 0) + amount

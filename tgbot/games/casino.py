@@ -59,10 +59,17 @@ class Casino:
 
     async def handle(self, query, context, data, user_id):
         # В казино сессия всегда привязана к user_id для сохранения баланса
-        user_stats = self.sessions.get(user_id, {})
-        coins = user_stats.get("casino_coins", STARTING_COINS)
-        bet = user_stats.get("casino_bet", 10)
-        history = user_stats.get("casino_history", [])
+        if user_id not in self.sessions:
+            self.sessions[user_id] = {
+                "casino_coins": STARTING_COINS,
+                "casino_bet": 10,
+                "casino_history": [],
+                "casino_last_bonus": 0
+            }
+        user_stats = self.sessions[user_id]
+        coins = user_stats["casino_coins"]
+        bet = user_stats["casino_bet"]
+        history = user_stats["casino_history"]
 
         if data == "game_casino":
             text = self.get_casino_text(coins, bet, history=history, result_text="🎮 Выбери ставку и крути барабаны!\n\n")
